@@ -22,7 +22,10 @@ USAGE_STR = 'USAGE: python unsubscribe.py path_to_users_list list_name '\
 
 
 def partition(pred, iterable):
-    """Use predicate to partition entries into false entries and true entries"""
+    """Use predicate to partition entries into false entries and true entries.
+
+    Thanks https://docs.python.org/dev/library/itertools.html.
+    """
     t_1, t_2 = itertools.tee(iterable)
     return itertools.ifilterfalse(pred, t_1), filter(pred, t_2)
 
@@ -54,11 +57,23 @@ def delete_email(target_list, api_user, api_key, email_to_remove):
     result = request.json()
 
     if 'removed' in result and result['removed'] == 1:
-        return {'successful': True, 'error': None}
+        return {
+            'successful': True,
+            'error': None,
+            'email': email_to_remove
+        }
     elif 'errors' in result:
-        return {'successful': False, 'error': '\n'.join(result['errors'])}
+        return {
+            'successful': False,
+            'error': '\n'.join(result['errors']),
+            'email': email_to_remove
+        }
     else:
-        return {'successful': False, 'error': 'unknown'}
+        return {
+            'successful': False,
+            'error': 'unknown',
+            'email': email_to_remove
+        }
 
 
 def delete_emails(target_list, api_user, api_key, emails_to_remove):
@@ -80,8 +95,8 @@ def delete_emails(target_list, api_user, api_key, emails_to_remove):
     """
     aut_delete_email = lambda x: delete_email(target_list, api_user, api_key, x)
     results = map(aut_delete_email, emails_to_remove)
-    (successful, failed) = partition(lambda x: x['successful'], results)
-    return {'successful': successful, 'failed': failed}
+    (failed, successful) = partition(lambda x: x['successful'], results)
+    return {'successful': list(successful), 'failed': list(failed)}
 
 
 def get_malformed_emails(target_list):
@@ -94,8 +109,8 @@ def get_malformed_emails(target_list):
     @rtype: tuple
     """
     email_has_at = lambda x: x.find('@') != -1
-    (valid_emails, malformed_emails) = partition(email_has_at, target_list)
-    return (valid_emails, malformed_emails)
+    (malformed_emails, valid_emails) = partition(email_has_at, target_list)
+    return (list(valid_emails), list(malformed_emails))
 
 
 def stringify_email_errors(results):
@@ -108,7 +123,7 @@ def stringify_email_errors(results):
     @rtype: str
     """
     stringify_email_err = lambda x: '%s (%s)' % (x['email'], x['error'])
-    email_error_strs = map(stringify_email_err, results['failed'])
+    email_error_strs = map(stringify_email_err, results)
     email_errors = '\n\t-'.join(email_error_strs)
     return '[ ERROR ] Failed to remove emails:\n\t-%s' % email_errors
 
@@ -143,7 +158,7 @@ def main():
     print '[ INFO ] %d successfully removed. Failed to remove %d.' % report_attr
 
     if len(results['failed']) > 0:
-        print stringify_email_errors(results)
+        print stringify_email_errors(results['failed'])
 
 
 if __name__ == '__main__':
